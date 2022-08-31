@@ -1,0 +1,100 @@
+---
+title: "Lab 01: Hello R"
+author: "Mengdi Chai"
+date: "8/19/2020"
+output: 
+  html_document: 
+    toc: yes
+    toc_float: yes
+    fig_width: 6
+    fig_height: 3
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-libraries}
+library(tidyverse)
+library(datasauRus)
+```
+
+
+## Exercise 1
+
+How many rows and how many columns does the datasaurus_dozen file have?
+```{r}
+dim(datasaurus_dozen)
+```
+There are three variables in the data frame: dataset, x, and y
+
+
+## Exercise 2
+
+```{r}
+# make a frequency table of the dataset variable
+datasaurus_dozen %>%
+  count(dataset)
+```
+
+```{r}
+#  filter for observations where dataset == "dino"
+dino_data <- datasaurus_dozen %>%
+  filter(dataset == "dino")
+# visualize these data
+ggplot(data = dino_data, mapping = aes(x = x, y = y)) +
+  geom_point()
+```
+
+```{r}
+# calculate a summary statistic
+dino_data %>%
+  summarize(r = cor(x, y))
+```
+
+## Exercise 3
+
+```{r}
+# Plot y vs. x for the star dataset
+star_data <- datasaurus_dozen %>%
+  filter(dataset == "star")
+
+ggplot(data = star_data, mapping = aes(x = x, y = y)) +
+  geom_point()
+
+# calculate a summary statistic
+star_data %>%
+  summarize(r = cor(x, y))
+
+```
+
+## Exercise 4
+
+```{r}
+# Plot y vs. x for the circle dataset
+circle_data <- datasaurus_dozen %>%
+  filter(dataset == "circle")
+
+ggplot(data = circle_data, mapping = aes(x = x, y = y)) +
+  geom_point()
+
+# calculate a summary statistic
+circle_data %>%
+  summarize(r = cor(x, y))
+```
+
+## Exercise 5
+
+```{r}
+# make use of facetting
+ggplot(datasaurus_dozen, aes(x = x, y = y, color = dataset))+
+  geom_point()+
+  facet_wrap(~ dataset, ncol = 3) +
+  theme(legend.position = "none")
+
+# use the group_by function to generate all correlation coefficients
+datasaurus_dozen %>%
+  group_by(dataset) %>%
+  summarize(r = cor(x, y))
+```
