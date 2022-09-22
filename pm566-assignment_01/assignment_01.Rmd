@@ -1,0 +1,124 @@
+---
+title: "assignment_01"
+output: html_document
+---
+
+Question 1:
+
+```{r}
+library(data.table)
+# read 2004 data 
+data_2004 <- fread("data/data_2004.csv")
+pm_2004 <- data.table(data_2004, keep.rownames=FALSE, check.names=FALSE, key=NULL, stringsAsFactors=FALSE)
+
+# read 2019 data 
+data_2019 <- fread("data/data_2019.csv")
+pm_2019 <- data.table(data_2019, keep.rownames=FALSE, check.names=FALSE, key=NULL, stringsAsFactors=FALSE)
+```
+
+```{r 2004}
+# check 2004 data
+
+# check the dimension
+dim(pm_2004)
+# check the header
+head(pm_2004)
+# check the footer
+tail(pm_2004)
+# check the variable name
+colnames(pm_2004)
+# check the variable type 
+str(pm_2004)
+# check the summary
+summary(pm_2004)
+```
+
+For pm_2004 data table, there are 19233 rows and 20 columns with 20 variables. For all those variables, there 
+are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num".
+The mean for PM2.5 Concentration in 2004 is 13.13, and the mean of daily air quality index value is 46.32
+
+```{r 2019}
+# check 2019 data
+
+# check the dimension
+dim(pm_2019)
+# check the header
+head(pm_2019)
+# check the footer
+tail(pm_2019)
+# check the variable name
+colnames(pm_2019)
+# check the variable type 
+str(pm_2019)
+# check the summary
+summary(pm_2019)
+```
+
+For pm_2019 data table, there are 53156 rows and 20 columns with 20 variables. For all those variables, there 
+are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num". The mean for PM2.5 Concentration in 2019 is 7.738, and the mean of daily air quality index value is 30.57
+
+
+Question 2:
+
+```{r}
+library(dplyr)
+# Combine the two years of data into one data frame
+pm <- rbind(pm_2004, pm_2019)
+
+# create a new column for year, which will serve as an identifier
+pm <- mutate(pm, year = factor(rep(c(2004, 2019), c(nrow(pm_2004), nrow(pm_2019)))))%>%
+  rename(lat = SITE_LATITUDE, lon = SITE_LONGITUDE, pm2.5 = "Daily Mean PM2.5 Concentration")
+```
+
+Question 3:
+
+```{r}
+library(leaflet)
+
+#filter locations and year of the table to create a new table
+pm_new <- pm
+pm_new = pm_new%>%
+  select(lat,lon,year)
+
+# Generating a color palette
+pm.pal <- colorFactor(c('blue','red'), domain=pm_new$year)
+
+# Create a basic map in leaflet() that shows the locations of the sites
+pmmap <- leaflet(pm_new) %>% 
+  # The looks of the Map
+  addProviderTiles('CartoDB.Positron') %>% 
+  # Some circles
+  addCircles(
+    lat = ~lat, lng=~lon,
+    label = ~paste0(year, ' C'), color = ~ pm.pal(year),
+    opacity = 1, fillOpacity = 1, radius = 2
+    ) %>%
+  # And a pretty legend
+  addLegend('bottomleft', pal=pm.pal, values=pm_new$year,
+          title='Year')
+
+pmmap
+```
+
+
+Question 4:
+
+```{r}
+# Check for any missing values of PM in the combined dataset
+which(is.na(pm$pm2.5))
+# Check for any implausible values of PM in the combined dataset
+which(is.nan(pm$pm2.5))
+```
+
+There is no missing or implausible values in the combined dataset
+
+
+Question 5:
+
+```{r}
+# combine state and county together as a new column
+pm <- mutate(pm, location = paste(STATE, COUNTY, sep = "."))
+# create the boxplot
+boxplot(location, pm2.5)
+
+```
