@@ -1,9 +1,12 @@
 ---
 title: "assignment_01"
-output: html_document
+output: 
+  html_document: 
+    highlight: haddock
+    theme: readable
 ---
 
-Question 1:
+# Question 1:
 
 ```{r}
 library(data.table)
@@ -33,9 +36,9 @@ str(pm_2004)
 summary(pm_2004)
 ```
 
-For pm_2004 data table, there are 19233 rows and 20 columns with 20 variables. For all those variables, there 
-are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num".
-The mean for PM2.5 Concentration in 2004 is 13.13, and the mean of daily air quality index value is 46.32
+<p><font size="4" color="red"><strong> summary of the finding </strong></font></p>
+
+<strong> For pm_2004 data table, there are 19233 rows and 20 columns with 20 variables. For all those variables, there are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num". The mean for PM2.5 Concentration in 2004 is 13.13, and the mean of daily air quality index value is 46.32 </strong>
 
 ```{r 2019}
 # check 2019 data
@@ -54,11 +57,12 @@ str(pm_2019)
 summary(pm_2019)
 ```
 
-For pm_2019 data table, there are 53156 rows and 20 columns with 20 variables. For all those variables, there 
-are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num". The mean for PM2.5 Concentration in 2019 is 7.738, and the mean of daily air quality index value is 30.57
+<p><font size="4" color="red"><strong> summary of the finding </strong></font></p>
+
+<strong>For pm_2019 data table, there are 53156 rows and 20 columns with 20 variables. For all those variables, there are 8 variables with data type "chr", 8 variables with data type "int", and 4 variables with data type "num". The mean for PM2.5 Concentration in 2019 is 7.738, and the mean of daily air quality index value is 30.57 </strong>
 
 
-Question 2:
+# Question 2:
 
 ```{r}
 library(dplyr)
@@ -70,7 +74,7 @@ pm <- mutate(pm, year = factor(rep(c(2004, 2019), c(nrow(pm_2004), nrow(pm_2019)
   rename(lat = SITE_LATITUDE, lon = SITE_LONGITUDE, pm2.5 = "Daily Mean PM2.5 Concentration")
 ```
 
-Question 3:
+# Question 3:
 
 ```{r}
 library(leaflet)
@@ -100,25 +104,119 @@ pmmap <- leaflet(pm_new) %>%
 pmmap
 ```
 
+<p> <font size="4" color="red"><strong> Summarize the spatial distribution of the monitoring sites </strong></font> </p>
+<strong>I find that there are more locations in 2019 than in 2004. The sites have more spread across the California in 2019 than in 2004.</strong>
 
-Question 4:
+# Question 4:
 
 ```{r}
 # Check for any missing values of PM in the combined dataset
-which(is.na(pm$pm2.5))
+apply(is.na(pm), 2, which)
 # Check for any implausible values of PM in the combined dataset
-which(is.nan(pm$pm2.5))
+apply(is.nan(as.matrix(pm)), 2, which)
 ```
 
-There is no missing or implausible values in the combined dataset
-
-
-Question 5:
+<strong>There is no implausible data where there has some missing data. All the missing data are in the column
+called CBSA_CODE (Core Based Statistical Areas). In addition, if CDSA_CODE is missing, CDSA_NAME is missing too.
+ </strong>
 
 ```{r}
-# combine state and county together as a new column
-pm <- mutate(pm, location = paste(STATE, COUNTY, sep = "."))
-# create the boxplot
-boxplot(location, pm2.5)
-
+# create a new data frame that only contains missing data
+missing_data <- filter(pm, CBSA_NAME == "") %>% 
+         select("Site Name", CBSA_CODE, CBSA_NAME, STATE, COUNTY, year)%>% 
+         unique
 ```
+
+<strong> We see that there are only 10 CBSA sites data missing in 2004, whereas in 2019, there are 15 code and name missing since in 2019, there are more individual monitors. All the missing CBSA sites in 2004 are also missing in 2019 except for Portola-161 Nevada Street. It may have many reasons to explain why even though 15 years passed, CBSA_code is still missing. However, since we do not have further data base, it is hard to tell the specific reason. </strong>
+
+# Question 5:
+
+<font size="4" color="red"><strong> Analysis trend based on state level </strong></font>
+```{r}
+library(ggplot2)
+
+set.seed(2015)
+idx <- sample(nrow(pm), 1000)
+qplot(year, pm2.5, data = pm[idx, ], geom = "boxplot")
+```
+
+<strong>From the boxplot, it seems that on average, the levels of PM2.5 in 2019 are lower than they were in 2004. Interestingly, there also appears to be much greater variation in PM2.5 in 2019 than there was in 2004 </strong>
+
+```{r}
+# do statistical analysis
+with(pm, tapply(pm2.5, year, summary))
+```
+
+<strong>It shows that both in 2004 and 2019, there are some negative values which could not occur in reality. Since the minimum value in 2004 is just -0.1 close to 0, so we just further explore data in 2019 only.</strong>
+
+```{r}
+# select nagative values in 2019 data
+filter(pm, year == "2019") %>% summarize(negative = mean(pm2.5 < 0, na.rm = TRUE))
+
+# get the portion of negatives values and extract the month from each of the dates with negative values and attempt to identify when negative values occur most often
+library(lubridate)
+negative <- filter(pm, year == "2019") %>% 
+         mutate(negative = pm2.5 < 0, date = as.Date(Date)) %>%
+         select(date, negative)
+
+mutate(negative, month = factor(month.name[month(date)], levels = month.name)) %>%
+         group_by(month) %>%
+         summarize(pct.negative = mean(negative, na.rm = TRUE) * 100)
+```
+
+<strong>After doing analysis, we find that the negative is only a small portion of data and the negative value occurs the most often in January. There is not further validation to say why January contains more negative value. So we just ignore those negative values from row.</strong>
+
+<font size="4" color="red"><strong> Analysis trend based on county level </strong></font>
+```{r}
+# calculate the mean of PM2.5 for each county in 2004 and 2019
+mn <- group_by(pm, year, COUNTY) %>% summarize(pm2.5 = mean(pm2.5, na.rm = TRUE))
+head(mn)
+tail(mn)
+
+# make the plot to show mean and draw a line connecting the means for each year in the same county to highlight the trend
+qplot(year, pm2.5, data = mutate(mn, year = as.numeric(as.character(year))), 
+       color = factor(COUNTY), 
+       geom = c("point", "line"))
+```
+<strong> From the graph, we find that most of counties decrease their PM2.5 concentration from 2004 to 2019, even though there are still few counties increase the PM2.5 concentration. </strong>
+
+<font size="4" color="red"><strong> Analysis trend based on Site in Los Angeles level </strong></font>
+```{r}
+# identify sites in Los Angeles that has data in 2004 and 2019
+sites <- filter(pm, COUNTY_CODE == 37) %>% select("Site ID", "Site Name", year) %>% unique %>% rename(site_id = "Site ID", site_name = "Site Name")
+# find the intersection between the sites present in 2004 and 2019
+site.year <- with(sites, split(site_id, year))
+both <- intersect(site.year[[1]], site.year[[2]])
+print(both)
+```
+
+<strong> There are eight monitors operated in 2004 and 2019. </strong>
+
+```{r}
+# choose one that had a reasonable amount of data in each year
+count <- pm %>%
+         rename(site_id = "Site ID") %>%
+         filter(site_id %in% both)
+
+# count the number of observations at each monitor to see which ones have the most observations
+group_by(count, site_id) %>% summarize(n = n())
+```
+<strong> Here we can see that site_id = 60371103 contains the most data, so we will pick this site </strong>
+
+```{r}
+# select monitor with site_id = 60371103
+pmsub <- pm %>%
+         rename(site_id = "Site ID") %>%
+         filter(site_id== 60371103) %>%
+         select(Date, year, pm2.5) %>%
+         mutate(Date = as.Date(Date), yday = yday(Date))
+
+# plot the time series data of PM2.5 for the monitor in both years
+qplot(yday, pm2.5, data = pmsub, facets = . ~ year, xlab = "Day of the year")
+```
+<strong> From the graph, I notice that the median levels of PM2.5 has decreased a little from 2004 to 2019. Also, the variation (spread) in the PM2.5 values in 2019 is smaller than it was in 2004, which suggests that not only are median levels of PM2.5 lower in 2019, but that there are fewer large spikes from day to day. </strong>
+
+
+
+
+
