@@ -1,0 +1,136 @@
+---
+title: "lab_06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE, include  = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(forcats)
+library(tidyverse)
+```
+
+```{r}
+# read dataset
+mtsample <- read.csv("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv")
+mts <- as_tibble(mtsample)
+```
+
+<strong> <h4> Question 1: What specialties do we have? </h4> </strong>
+
+```{r}
+ms <- mtsample %>%
+  count(medical_specialty)
+
+ms %>%
+    arrange(desc(n)) %>%
+knitr::kable()
+```
+
+<strong> There are `r nrow(specialties)` medical specialties. </strong>
+
+```{r}
+ms %>%
+  top_n(10) %>%
+  ggplot(aes(x = n, y = fct_reorder(medical_specialty, n ))) +
+    geom_col()
+```
+
+<strong> The distribution is not uniform. </strong>
+
+
+<strong> <h4> Question 2 </h4> </strong>
+
+```{r}
+mtsample %>%
+  unnest_tokens(word, transcription) %>%
+  count(word, sort = TRUE) %>%
+  top_n(20, n) %>%
+  ggplot(aes(n, fct_reorder(word, n))) +
+  geom_col()
+```
+
+<strong> There are lots of stop words here, non-specific to medical text. </strong>
+
+<strong> <h4> Question 3 </h4> </strong>
+```{r}
+mtsample %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words, by = c("word")) %>%
+  count(word, sort = TRUE) %>%
+  #use regular expression to avoid numbers
+  filter(!grepl(pattern = "^[0-9]+$", x = word)) %>%
+  top_n(20, n) %>%
+  ggplot(aes(n, fct_reorder(word, n))) +
+  geom_col()
+````
+
+<strong> Removing those stop words let us have a better idea about what the text is about </strong>
+
+<strong> <h4> Question 4 </h4> </strong>
+```{r}
+mtsample %>%
+  unnest_ngrams(bigram, transcription, n=2) %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(20, n) %>%
+  ggplot(aes(n, fct_reorder(bigram, n))) +
+  geom_col()
+```
+
+```{r}
+mts %>%
+  unnest_ngrams(trigram, transcription, n=3) %>%
+  count(trigram, sort = TRUE) %>%
+  top_n(20, n) %>%
+  ggplot(aes(n, fct_reorder(trigram, n))) +
+  geom_col()
+```
+
+<strong> Trigrams have a few more medical word group than bigrams. </strong>
+
+<strong> <h4> Question 5 </h4> </strong>
+```{r}
+ptbigram <- mtsample %>%
+  unnest_ngrams(bigram, transcription, n = 2) %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ") %>%
+  select(word1, word2) %>%
+  filter(word1 == "patient" | word2 == "patient")
+```
+
+<strong> Words appearing before patient: </strong>
+```{r}
+ptbigram %>%
+  filter(word2 == "patient") %>%
+  count(word1, sort = TRUE) %>%
+  anti_join(stop_words, by = c("word1" = "word")) %>%
+  top_n(10) %>%
+knitr::kable()
+```
+
+<strong> Words appearing after patient: </strong>
+```{r}
+ptbigram %>%
+  filter(word1 == "patient") %>%
+  count(word2, sort = TRUE) %>%
+  anti_join(stop_words, by = c("word2" = "word")) %>%
+  top_n(10) %>%
+knitr::kable()
+```
+
+<strong> <h4> Question 6</h4> </strong>
+
+```{r}
+mtsample %>%
+  unnest_tokens(word, transcription) %>%
+  group_by(medical_specialty) %>%
+  count(word, sort = TRUE) %>%
+  filter(!(word %in% stop_words$word) & !grepl(pattern = "^[0-9]+$", x = word)) %>%
+  top_n(5, n) %>%
+  arrange(medical_specialty, desc(n)) %>%
+knitr::kable()
+```
