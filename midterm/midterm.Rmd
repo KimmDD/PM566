@@ -1,0 +1,278 @@
+---
+title: "midterm"
+output: html_document
+---
+
+<h2><strong> Introduction </strong> </h2> 
+
+<p> As we all know, breast cancer can occur in women but rarely in men. Until now, 
+breast cancer becomes the second leading cause of cancer death in women. According to 
+CDC (Center for Disease Control and Prevention)'s analysis, About 264,000 women and 2,400 men are given the diagnosis of breast cancer each year in the US. The United States loses 500 men and 42,000 women to breast cancer each year. Therefore, it is necessary for us to analyze the data of breast cancer patients and to discover the pathway and mechanism of breast cancer-related genes due to the high prevalence and mortality rate. </p>
+
+<p> The Cancer Genome Atlas Program (TCGA) is a cancer genomics program that collects
+ over 20,000 cancer tissue samples and matches them with normal samples spanning over 33
+ cancer types (National Institute of Health). The Clinical Proteomic Tumor Analysis Consortium
+(CPTAC) is a database that provides over 1100 patients’ proteogenomic data to analyze cancer
+(National Cancer Institute). These two publicly available databases are used for multi-omic data
+analysis, which integrates data sets from many omic groupings. </p>
+
+<p> In this study, We explore the difference factors, such as race, gender, age, in breast cancer patients.
+And we will try to answer several questions: </p>
+<li> What's the difference between survival rate and race in women and try to analyze the reason behind this situation? </li>
+<li> What's the difference between survival rate and age category in women?  </li>
+<li> Try to find the most mutated genes and analyze it in genders  </li>
+
+
+<h2><strong> Method </strong> </h2> 
+
+<p> The analysis was mainly conducted in R using breast cancer clinical and
+RNAseq data. The data was sourced from TCGA with the TCGAbiolinks library using accession
+code “BRCA.” In the dataset, there were a total of 1174 patients. Of the patients that had sex
+listed in their clinical data, 1161 of the patients were female and only 13 were male. </p>
+
+```{r}
+#if (!require("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("TCGAbiolinks", force = TRUE)
+library(TCGAbiolinks)
+```
+
+```{r include=FALSE}
+# downloading clinical data
+clin_query <- GDCquery(project = "TCGA-BRCA",
+                       data.category = "Clinical",
+                       file.type = "xml")
+
+#GDCdownload(clin_query)
+```
+
+```{r include=FALSE}
+# get the clinic dataframe
+clinic <- GDCprepare_clinic(clin_query, clinical.info = "patient")
+```
+
+<p> First, we select data only with female patients </p>
+
+```{r}
+library(tidyverse)
+clinic <- clinic %>%
+          filter(gender == "FEMALE")
+```
+
+<p> Then we try to deal with missing data for column race and age since these two columns we will use later. We find that after we extract the missing values, there are 108 patients do not have race information and all the patients have age information. </p>
+
+```{r}
+# extract empty value in race 
+clinic_race_no_NAs <- clinic[!(clinic$race_list == "" | is.na(clinic$race_list)), ]
+# extract empty value in age
+clinic_age_no_NAs <- clinic[!(clinic$age_at_initial_pathologic_diagnosis == "" | is.na(clinic$age_at_initial_pathologic_diagnosis)), ]
+```
+
+<p> Using the “age_at_initial_pathological_diagnosis” column in the clinical data, we compared patients with different age range. We use an ifelse() statement to add a new column called age_category, which stores the young vs. old classification. For the purposes of our analysis, we will define “young” as younger than 50 years old, and “old” as greater than or equal to 50 years old. </p>
+
+```{r}
+# create the new column
+clinic_age_no_NAs$age_category = ifelse(clinic_age_no_NAs$age_at_initial_pathologic_diagnosis <50, "young", "old")
+```
+
+The visualizations and analyses were created using an assortment of libraries within R. In R, TCGABioLinks was used to access the data, Maftools was used for mutation analysis, Survival and Survminer were used to create Kaplan-Meier Curves, and ggplot2 was used to create boxplots. </p>
+
+
+<h2><strong> Preliminary Results </strong> </h2> 
+
+<h5> Question 1: What's the difference between survival rate and race in women and try to analyze the reason behind this situation? </h5>
+
+```{r}
+library(survival)
+library(survminer)
+```
+
+```{r}
+sum_exp_dataframe<- as.data.frame(clinic_race_no_NAs)
+
+# replace the NA balue in days_to_death to days_to_last_follow_up
+sum_exp_dataframe$days_to_death = ifelse(is.na(sum_exp_dataframe$days_to_death), 
+                                       sum_exp_dataframe$days_to_last_followup, sum_exp_dataframe$days_to_death)
+```
+
+```{r}
+# make the days_to_death column numeric 
+sum_exp_dataframe$days_to_death = as.numeric(sum_exp_dataframe$days_to_death)
+# create the death_event column here
+sum_exp_dataframe$death_event = ifelse(sum_exp_dataframe$vital_status == "Alive", 0, 1)
+```
+
+```{r}
+# We initialize a 'survival' object first, which contains the data we need.
+surv_object <- Surv(time = sum_exp_dataframe$days_to_death, 
+                    event = sum_exp_dataframe$death_event)
+
+# We then create a fit object to do the race analysis 
+race_fit <- surv_fit( surv_object ~ sum_exp_dataframe$race_list, data = sum_exp_dataframe )
+```
+
+```{r}
+#the ggtheme and legend arguments are for formatting. 
+# Feel free to play around with the margins and legend placement
+survplot = ggsurvplot(race_fit, 
+                      pval=TRUE, 
+                      ggtheme = theme(plot.margin = unit(c(1,1,1,1), "cm")), 
+                      legend = "right")
+# draw the final plot
+p = survplot$plot + 
+  theme_bw() +  # changes the appearance to be a bit prettier
+  theme(axis.title = element_text(size=15), # increase font sizes
+        axis.text = element_text(size=10),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=10))
+p
+```
+<p> From the graph, we can see that the p value is 0.73 which is extremely large. In this case, we cannot conclude that a significant difference exists. However, there are many reasons in it. First of all, we only have 1053 sample size which is extremely small. Since human's population is extremely large, there should be more sample size to show the significant results. In addition, it is due to the sample bias. In race list, there is only 1 patient from "AMERICAN INDIAN OR ALASKA NATIVE" category, and there are only 62 patients from "ASIAN" cateogory. The rest of patients are all WHITE or BLACK OR AFRICAN AMERICAN. Because of that, we closer look at these two races: WHITE, BLACK OR AFRICAN AMERICAN. </p>
+
+```{r}
+sum_exp_dataframe_sub <- sum_exp_dataframe %>%
+          filter(race_list == "WHITE" | race_list == "BLACK OR AFRICAN AMERICAN" )
+
+surv_object <- Surv(time = sum_exp_dataframe_sub$days_to_death, 
+                    event = sum_exp_dataframe_sub$death_event)
+
+race_sub_fit <- surv_fit( surv_object ~ sum_exp_dataframe_sub$race_list, data = sum_exp_dataframe_sub )
+```
+
+```{r}
+survplot = ggsurvplot(race_sub_fit, 
+                      pval=TRUE, 
+                      ggtheme = theme(plot.margin = unit(c(1,1,1,1), "cm")), 
+                      legend = "right")
+# draw the final plot
+p = survplot$plot + 
+  theme_bw() +  # changes the appearance to be a bit prettier
+  theme(axis.title = element_text(size=15), # increase font sizes
+        axis.text = element_text(size=10),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=10))
+p
+```
+<p> We could see that the p-value decreases but still big enough to hard to draw the conclusion. However, according to the general conclusion from other research papers. The overall trend for survival rate is higher in white patients rather than in Black or American American patients due to the wealth index and region difference. </p>
+
+<h5> Question 2: What's the difference between survival rate and age category in women? </h5>
+
+```{r}
+sum_exp_dataframe_age<- as.data.frame(clinic_age_no_NAs)
+
+# replace the NA balue in days_to_death to days_to_last_follow_up
+sum_exp_dataframe_age$days_to_death = ifelse(is.na(sum_exp_dataframe_age$days_to_death), 
+                                       sum_exp_dataframe_age$days_to_last_followup, sum_exp_dataframe_age$days_to_death)
+```
+
+```{r}
+# make the days_to_death column numeric 
+sum_exp_dataframe_age$days_to_death = as.numeric(sum_exp_dataframe_age$days_to_death)
+# create the death_event column here
+sum_exp_dataframe_age$death_event = ifelse(sum_exp_dataframe_age$vital_status == "Alive", 0, 1)
+```
+
+```{r}
+# We initialize a 'survival' object first, which contains the data we need.
+surv_object <- Surv(time = sum_exp_dataframe_age$days_to_death, 
+                    event = sum_exp_dataframe_age$death_event)
+
+# We then create a fit object to do the race analysis 
+age_fit <- surv_fit( surv_object ~ sum_exp_dataframe_age$age_category, data = sum_exp_dataframe_age )
+```
+
+```{r}
+#the ggtheme and legend arguments are for formatting. 
+# Feel free to play around with the margins and legend placement
+survplot = ggsurvplot(age_fit, 
+                      pval=TRUE, 
+                      ggtheme = theme(plot.margin = unit(c(1,1,1,1), "cm")), 
+                      legend = "right")
+# draw the final plot
+p_age = survplot$plot + 
+  theme_bw() +  # changes the appearance to be a bit prettier
+  theme(axis.title = element_text(size=15), # increase font sizes
+        axis.text = element_text(size=10),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=10))
+p_age
+```
+<p> Since there are no missing values in age column in the original data and only two categories for age exist, the p-value is small and we could see the general trend is that with time passes by, the survival probability in young patients is much larger than in old patients. It is a reasonable conclusion since old patients usually have weaker immune system and have bigger chance to have other concomitant diseases comparing with young patients. </p> 
+
+
+<h5> Question 3: Try to find the most mutated genes and analyze it in difference in genders. </h5>
+
+```{r}
+library(devtools)
+
+#slam_url <- "https://cran.r-project.org/src/contrib/Archive/slam/slam_0.1-37.tar.gz"
+#install_url(slam_url)
+
+#install_github("PoisonAlien/maftools", force = TRUE)
+```
+
+```{r}
+library(maftools)
+
+colnames(clinic)[colnames(clinic) == "bcr_patient_barcode"] <- "Tumor_Sample_Barcode"
+```
+
+```{r include=FALSE}
+# downloading MAF
+query_maf <- GDCquery(project = "TCGA-BRCA", 
+                      data.category = "Simple Nucleotide Variation", 
+                      data.type = "Masked Somatic Mutation", 
+                      legacy = F)
+
+#GDCdownload(query_maf)
+maf_prep <- GDCprepare(query_maf)
+maf_object <- read.maf(maf = maf_prep, clinicalData = clinic, isTCGA = TRUE)
+```
+
+```{r}
+oncoplot(maf = maf_object,
+         top = 20) 
+```
+<p> From the graph, we can see that TP53 is the most mutated genes comparing with other genes. </p> 
+
+```{r}
+# downloading the query
+query <- GDCquery(project = "TCGA-BRCA",
+                  data.category = "Transcriptome Profiling",
+                  data.type = "Gene Expression Quantification",
+                  workflow.type = "STAR - Counts")
+
+sum_exp = GDCprepare(query)
+```
+
+```{r}
+# Find the Ensembl gene ID of gene TP53
+TP53_ensembl_mask <- rowData(sum_exp)$gene_name == "TP53"
+ensembl_TP53 <- rowData(sum_exp)$gene_id[TP53_ensembl_mask]
+```
+
+```{r}
+# find the NA values on gender
+bool_gender_na = is.na(colData(sum_exp)$gender)
+# exclude the NA values in gender
+gender_cat_no_NAs = sum_exp$gender[!bool_gender_na]
+# Count the genes with gender
+gene_counts = assays(sum_exp)$unstranded[ensembl_TP53,!bool_gender_na]
+```
+
+```{r}
+library(ggplot2)
+png('box.png')
+boxplot(gene_counts ~ gender_cat_no_NAs, 
+        main = "TP53 counts on male vs. female",
+        xlab = "Gender", 
+        ylab = "Gene Count",
+        cex.axis = 1,
+        col="orange")
+dev.off()
+```
+<p> It is so said that my boxplot cannot be knit. But I will explain it. From the graph, we can see that the gene count in female is much larger than in male due to the difference in sample size. According to the general trend, the TP53 has more counts in female than in male, leading to female has higher rate to have breast cancer since this gene is highly mutated in breast cancer. </p>
+
+<h2><strong> Conclusion </strong></h2>
+
+<p> Overall, we can see that due to the sample size and sample bias, it is hard to see which race in women has higher survival probability in breast cancer. However, if we counts for age, it is obvious that young patients have higher survival probability than old patients. In addition, we find that TP53 is the highest mutated gene in breast cancer patients and women has higher counts in TP53 than men. </p>
