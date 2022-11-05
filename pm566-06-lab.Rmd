@@ -68,7 +68,7 @@ mtsample %>%
   top_n(20, n) %>%
   ggplot(aes(n, fct_reorder(word, n))) +
   geom_col()
-````
+```
 
 <strong> Removing those stop words let us have a better idea about what the text is about </strong>
 
