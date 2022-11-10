@@ -9,7 +9,7 @@ always_allow_html: true
 ---
 
 ** HTML Report: **
-[**Click here**](https://rawcdn.githack.com/KimmDD/PM566/a270c33a4b2883a2fdce573e0e3b6d9d0f6e0016/pm566-11-lab/lab11.html)
+[**Click here**](https://rawcdn.githack.com/KimmDD/PM566/29ad56cb3328ec75cbc3c86150452cda4418a8c5/pm566-11-lab/lab11.html)
 **And remember to set `eval=TRUE`**
 
 ```{r setup, message=FALSE, echo=FALSE, warning=FALSE, eval=TRUE}
