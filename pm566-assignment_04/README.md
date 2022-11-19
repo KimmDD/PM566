@@ -1,0 +1,206 @@
+---
+title: "assignment_04"
+date: "11/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+** HTML Report: **
+[**Click here**](https://rawcdn.githack.com/KimmDD/PM566/db99b268233812312d95a2c1063623b2c64ff02e/pm566-assignment_04/assignment_04.html)
+
+## HPC
+
+### Problem 1: Make sure your code is nice
+
+Original Function calculating total row sums
+```{r}
+# Total row sums
+fun1 <- function(mat) {
+  n <- nrow(mat)
+  ans <- double(n) 
+  for (i in 1:n) {
+    ans[i] <- sum(mat[i, ])
+  }
+  ans
+}
+```
+
+Rewrite fun1 function to make it faster 
+```{r}
+fun1alt <- function(mat) {
+  # YOUR CODE HERE
+  rowSums(mat, na.rm=TRUE)
+}
+```
+
+Original Function calculating cumulative sum by row
+```{r}
+# Cumulative sum by row
+fun2 <- function(mat) {
+  n <- nrow(mat)
+  k <- ncol(mat)
+  ans <- mat
+  for (i in 1:n) {
+    for (j in 2:k) {
+      ans[i,j] <- mat[i, j] + ans[i, j - 1]
+    }
+  }
+  ans
+}
+```
+
+Rewrite fun2 function to make it faster 
+```{r}
+fun2alt <- function(mat) {
+  # YOUR CODE HERE
+  t(apply(mat, 1, cumsum))
+}
+```
+
+Set up data example
+```{r}
+# Use the data with this code
+set.seed(2315)
+dat <- matrix(rnorm(200 * 100), nrow = 200)
+```
+
+Test the first function
+```{r}
+# Test for the first
+summary(microbenchmark::microbenchmark(
+  fun1(dat),
+  fun1alt(dat),check = "equivalent"
+), unit = "relative")
+```
+
+Test the second function
+```{r}
+# Test for the second
+summary(microbenchmark::microbenchmark(
+  fun2(dat),
+  fun2alt(dat), check = "equivalent"
+), unit = "relative")
+```
+
+### Problem 2: Make things run faster with parallel computing
+
+The following function allows simulating PI. 
+```{r}
+sim_pi <- function(n = 1000, i = NULL) {
+  p <- matrix(runif(n*2), ncol = 2)
+  mean(rowSums(p^2) < 1) * 4
+}
+
+# Here is an example of the run
+set.seed(156)
+sim_pi(1000) # 3.132
+```
+
+In order to get accurate estimates, we can run this function multiple times
+
+```{r}
+# This runs the simulation a 4,000 times, each with 10,000 points
+set.seed(1231)
+system.time({
+  ans <- unlist(lapply(1:4000, sim_pi, n = 10000))
+  print(mean(ans))
+})
+```
+
+Rewrite the previous code using parLapply() to make it run faster.
+```{r}
+library(parallel)
+# YOUR CODE HERE
+cl <- parallel::makePSOCKcluster(2L)
+
+# PREPARING THE CLUSTER
+clusterSetRNGStream(cl, 1231) # Equivalent to `set.seed(1231)`
+
+system.time({
+  # YOUR CODE HERE
+  clusterExport(cl,"sim_pi")
+  ans <- unlist(parallel::parLapply(cl,1:4000, sim_pi, n = 10000))
+  print(mean(ans))
+})
+
+# Stop the cluster
+parallel::stopCluster(cl)
+```
+
+## SQL
+
+### Setup a temporary database by running the following chunk
+
+```{r}
+library(RSQLite)
+library(DBI)
+
+# Initialize a temporary in memory database
+con <- dbConnect(SQLite(), ":memory:")
+
+# Download tables
+film <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/film.csv")
+film_category <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/film_category.csv")
+category <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/category.csv")
+
+# Copy data.frames to database
+dbWriteTable(con, "film", film)
+dbWriteTable(con, "film_category", film_category)
+dbWriteTable(con, "category", category)
+```
+
+### Question 1
+
+How many many movies is there available in each rating catagory.
+
+```{sql, connection=con}
+SELECT rating, COUNT(*) AS "movie_count"
+FROM film
+GROUP BY rating
+```
+
+### Question 2
+
+What is the average replacement cost and rental rate for each rating category.
+```{sql, connection=con}
+SELECT rating, AVG(replacement_cost) AS "average of replacement cost", AVG(rental_rate) AS "average of rental rate"
+FROM film
+GROUP BY rating
+```
+
+### Question 3
+
+Use table film_category together with film to find the how many films there are with each category ID
+
+```{sql, connection=con}
+SELECT category_id, COUNT(*) AS movie_count
+FROM film
+INNER JOIN film_category
+ON film.film_id = film_category.film_id
+GROUP BY category_id
+```
+
+### Question 4
+
+Incorporate table category into the answer to the previous question to find the name of the most popular category.
+
+```{sql, connection=con}
+SELECT category.name, COUNT(*) AS movie_count
+FROM film
+INNER JOIN film_category
+ON film.film_id = film_category.film_id
+INNER JOIN category
+ON film_category.category_id = category.category_id
+GROUP BY category.name
+ORDER BY movie_count DESC
+```
+Sports is the most popular category
+
+### Clean up
+Run the following chunk to disconnect from the connection.
+```{r}
+dbDisconnect(con)
+```
